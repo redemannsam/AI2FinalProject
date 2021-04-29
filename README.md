@@ -7,7 +7,7 @@
     git clone --recursive https://github.com/openai/retro.git gym-retro
     cd gym-retro
     
-2.) Import ROM. You will need to input your Steam credentials:
+2.) Import ROM installed on computer. You will need to input your Steam credentials:
 
     python retro/scripts/import_sega_classics.py
     

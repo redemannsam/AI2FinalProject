@@ -13,4 +13,4 @@
     
 3.) Run a random Sonic agent:
     
-    python examples/random_agent.py --game SonicTheHedgehog-Genesis --state GreenHillZone.Act1
+    python retro/examples/random_agent.py --game SonicTheHedgehog-Genesis --state GreenHillZone.Act1

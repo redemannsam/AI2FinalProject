@@ -4,6 +4,7 @@ import random
 import cv2
 import numpy as np
 from sklearn.metrics import pairwise_distances_argmin_min
+from sklearn.metrics.pairwise import euclidean_distances
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--game', default='Airstriker-Genesis', help='the name or path for the game to run')
@@ -22,7 +23,24 @@ verbosity = args.verbose - args.quiet
 
 
 
+#encode actions into action array
+actions=np.zeros([7,12])
+right=np.zeros([12])
+left=np.zeros([12])
+jump=np.zeros([12])
+crouch=np.zeros([12])
+right =[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+left= [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0]
+jump= [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0]
+crouch=[0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]
+actions[0]=right
+actions[1]=np.add(right,jump)
+actions[2]=left
+actions[3]=np.add(left,jump)
+actions[4]=jump
+actions[5]=crouch
 
+Qarray=np.zeros([1000,7])
 
 imgarray = []
 inx, iny, inc = env.observation_space.shape
@@ -31,22 +49,26 @@ inx = int(inx/8)
 iny = int(iny/8)
 #stores the IMG state for up to 1,000 states
 stateIMG=np.zeros([1000,1120])
+zeroRow=np.zeros([1120])
 #Size of each cluster
 clusterSize=np.zeros([1000])
 states=0
 #default policy of going forward
-default =[0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]
+
 Policy=np.zeros([1000,12])
 #Set Policy for each state to default
 for i in range(len(Policy)):
-    Policy[i]=default
+    Policy[i]=actions[0]
     #print(i)
 curState=0
+replacementMargin=1.5
+
 try:
     while True:
         ob = env.reset()
         t = 0
         totrew = [0] * args.players
+        #get all actions
         while True:
             ac = Policy[curState]
             #print(Policy[curState])
@@ -61,7 +83,7 @@ try:
             #print("\n")
             ob, rew, done, info = env.step(ac)
             t += 1
-            if t % 10 == 0:
+            if t % 5 == 0:
                 #captures environment
                 ob = cv2.resize(ob, (inx, iny))
                 ob = cv2.cvtColor(ob, cv2.COLOR_BGR2GRAY)
@@ -93,9 +115,37 @@ try:
                     curState=closest[0]
                     #print(closest[0])
                     #print("\n")
-                    #Preform K-Means clustering
-                    stateIMG[closest[0]]=(clusterSize[closest[0]]*stateIMG[closest[0]]+imgarray)/(1+clusterSize[closest[0]])
-                    clusterSize[closest[0]]+=1
+                    #Check if new scan is more different from closest scan then two existing scans by replacement margin
+                    ranstate=random.randint(0,999)
+                    formattedRan=np.zeros([2,1120])
+                    formattedRan[0]=stateIMG[ranstate]
+                    #Set Random Center to zero in order to find next closest cluster center
+                    stateIMG[ranstate]=zeroRow
+                    closestRan, _ = pairwise_distances_argmin_min(formattedRan, stateIMG)
+                    stateIMG[ranstate]=formattedRan[0]
+                    formattedClosestRan=np.zeros([2,1120])
+                    formattedClosestRan[0]=stateIMG[closestRan[0]]
+                    formattedClosest=np.zeros([2,1120])
+                    formattedClosest[0]=stateIMG[closest[0]]
+                    closestNewDist=euclidean_distances(formatted,formattedClosest)
+                    closestRandDist=euclidean_distances(formattedRan, formattedClosestRan)
+                    #print(closestNewDist)
+                    #print("\n")
+                    #print(closestRandDist)
+                    #print("\n \n")
+                    if(closestRandDist[0][0]*replacementMargin<closestNewDist[0][0]):
+                        #if the distance between the randomly selected cluster center and the closest center to that cluster times the replacementMargin
+                        #  is less then the distance between the new image and the closest center combine random and closest and make the new
+                        # image a cluster center
+                        #print(closestRan[0])
+                        stateIMG[closestRan[0]]=(clusterSize[closestRan[0]]*stateIMG[closestRan[0]]+clusterSize[ranstate]*stateIMG[ranstate])/(clusterSize[ranstate]+clusterSize[closestRan[0]]) 
+                        clusterSize[closestRan[0]]+=clusterSize[ranstate]
+                        stateIMG[ranstate]=formatted[0]
+                        clusterSize[ranstate]=1
+                    else:
+                        #Preform K-Means clustering
+                        stateIMG[closest[0]]=(clusterSize[closest[0]]*stateIMG[closest[0]]+imgarray)/(1+clusterSize[closest[0]])
+                        clusterSize[closest[0]]+=1
                     #print(stateIMG[closest[0]])
                     #print("\n")
 

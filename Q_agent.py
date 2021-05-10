@@ -39,9 +39,13 @@ actions[2]=left
 actions[3]=np.add(left,jump)
 actions[4]=jump
 actions[5]=crouch
-
+#actions[6]=right
+stateStored=250
+recentStates=np.zeros([stateStored,4])
 Qarray=np.zeros([1000,7])
-
+QarrayReps=np.zeros([1000,7])
+recentCounter=0
+curState=0
 imgarray = []
 inx, iny, inc = env.observation_space.shape
 
@@ -51,6 +55,7 @@ iny = int(iny/8)
 stateIMG=np.zeros([1000,1120])
 zeroRow=np.zeros([1120])
 #Size of each cluster
+
 clusterSize=np.zeros([1000])
 states=0
 #default policy of going forward
@@ -61,22 +66,83 @@ for i in range(len(Policy)):
     Policy[i]=actions[0]
     #print(i)
 curState=0
-replacementMargin=1.5
+replacementMargin=2
 
 try:
     while True:
         ob = env.reset()
         t = 0
         totrew = [0] * args.players
-        #get all actions
+        #start with initial action for data
+        ob, rew, done, info = env.step(actions[6])
+        #captures environment
+        xpos = info['x']
+        totalRew=0
+
         while True:
-            ac = Policy[curState]
+            if(states<1000):
+                act=random.randint(0, 13)
+                if(act>6):
+                    act=0
+            else:
+                #print(np.max(Qarray[curState]))
+                act=np.argmax(Qarray[curState])
+            if(recentCounter<stateStored):
+                QarrayReps[curState][act]+=1
+                recentStates[recentCounter][0]=curState
+                recentStates[recentCounter][1]=act
+                recentStates[recentCounter][2]=xpos
+                recentStates[recentCounter][3]=totalRew
+                recentCounter+=1
+            else:
+                stall=0
+                MoveStall=0
+                for i in range(stateStored):
+                    if (abs(xpos-recentStates[i][2])<=5):
+                        MoveStall+=1
+                        if(act==recentStates[i][1] and act!=1 and act!=4):
+                            stall+=1
+                #print(stall)
+                if(MoveStall>=stateStored*0.99 and states>=100):
+                    # if stalling reset
+                    #print("reset")
+                    zero=np.zeros([7])
+                    Qarray[curState]=zero
+                    QarrayReps[curState]=zero
+                for i in range(stateStored):
+                    #print(recentStates[i][0])
+                    #print(recentStates[i][1])
+                    reward=(xpos-recentStates[i][2])
+                    if(act==0 or act==1):
+                        reward+=5
+                    if(act==5):
+                        reward-=5
+                    if (abs(reward)<=5):
+                        reward-=5*stall
+                        if(act==6 or act==5):
+                            reward-=5*stall
+                    #print(reward)
+                    reps=QarrayReps[int(recentStates[i][0])][int(recentStates[i][1])]
+                    if(reps<0):
+                        print(reps)
+                    Qarray[int(recentStates[i][0])][int(recentStates[i][1])]=(reps*Qarray[int(recentStates[i][0])][int(recentStates[i][1])]+reward)/(reps+1)
+                    #print( Qarray[int(recentStates[i][0])][int(recentStates[i][1])])
+                update=recentCounter%stateStored
+                recentStates[update][0]=curState
+                recentStates[update][1]=act
+                recentStates[update][2]=xpos
+                recentStates[update][3]=totalRew
+                recentCounter+=1
+                QarrayReps[curState][act]+=1
+            #print(xpos)
+            ac=actions[act]
+            #ac = Policy[curState]
             #print(Policy[curState])
             #print("\n")
             
-            if(random.randint(0,2)==0):
+            #if(random.randint(0,2)==0):
                 #adds variance for more interesting runs
-                ac=env.action_space.sample()
+            #    ac=env.action_space.sample()
             #print(ac)
             #print("\n")
             #print("\n")
@@ -91,7 +157,8 @@ try:
 
                 #cv2.imshow('main', scaledimg)
                 #cv2.waitKey(1)
-
+                xpos = info['x']
+                #xpos_end = info['screen_x_end']
                 #convert screenshot into 1D array of values
                 for x in ob:
                     for y in x:
@@ -105,6 +172,7 @@ try:
                     #print(stateIMG[states])
                     #print("\n")
                     clusterSize[states]+=1
+                    curState=states
                     states+=1
                 else:
                     #formatt states array
@@ -137,18 +205,25 @@ try:
                         #if the distance between the randomly selected cluster center and the closest center to that cluster times the replacementMargin
                         #  is less then the distance between the new image and the closest center combine random and closest and make the new
                         # image a cluster center
-                        #print(closestRan[0])
+                        #print("replace")
                         stateIMG[closestRan[0]]=(clusterSize[closestRan[0]]*stateIMG[closestRan[0]]+clusterSize[ranstate]*stateIMG[ranstate])/(clusterSize[ranstate]+clusterSize[closestRan[0]]) 
+                        #update Q-array on replace
+                        Qarray[closestRan[0]]=(clusterSize[closestRan[0]]*Qarray[closestRan[0]]+clusterSize[ranstate]*Qarray[ranstate])/(clusterSize[ranstate]+clusterSize[closestRan[0]])
+                        QarrayReps[closestRan[0]]+=QarrayReps[ranstate]
                         clusterSize[closestRan[0]]+=clusterSize[ranstate]
+                        Qarray[ranstate]=np.zeros([7])
+                        
                         stateIMG[ranstate]=formatted[0]
                         clusterSize[ranstate]=1
+                        curState=ranstate
                     else:
                         #Preform K-Means clustering
                         stateIMG[closest[0]]=(clusterSize[closest[0]]*stateIMG[closest[0]]+imgarray)/(1+clusterSize[closest[0]])
                         clusterSize[closest[0]]+=1
+                        curState=closest[0]
                     #print(stateIMG[closest[0]])
                     #print("\n")
-
+                
                 imgarray.clear()        
                 if verbosity > 1:
                     infostr = ''
@@ -165,6 +240,7 @@ try:
                         print('t=%i p=%i got reward: %g, current reward: %g' % (t, i, r, totrew[i]))
                     if r < 0:
                         print('t=%i p=%i got penalty: %g, current reward: %g' % (t, i, r, totrew[i]))
+                    totalRew=totrew[i]
             if done:
                 env.render()
                 try:
@@ -174,6 +250,7 @@ try:
                         else:
                             print("done! total reward: time=%i, reward=%d" % (t, totrew[0]))
                         input("press enter to continue")
+                        ob, rew, done, info = env.step([False, False, False, True, False, False, False, False, False, False, False, False])
                         print()
                     else:
                         input("")

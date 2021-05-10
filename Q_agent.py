@@ -22,6 +22,16 @@ env = retro.make(args.game, args.state or retro.State.DEFAULT, scenario=args.sce
 verbosity = args.verbose - args.quiet
 
 
+#HYPERPARAMETERS
+replacementMargin=2
+stateStored=250
+forwardBonus=5
+stallPenalty=5
+stallRadius=5
+stallReset=0.99
+penalizeJumpStall=False
+
+
 
 #encode actions into action array
 actions=np.zeros([7,12])
@@ -40,7 +50,6 @@ actions[3]=np.add(left,jump)
 actions[4]=jump
 actions[5]=crouch
 #actions[6]=right
-stateStored=250
 recentStates=np.zeros([stateStored,4])
 Qarray=np.zeros([1000,7])
 QarrayReps=np.zeros([1000,7])
@@ -66,7 +75,7 @@ for i in range(len(Policy)):
     Policy[i]=actions[0]
     #print(i)
 curState=0
-replacementMargin=2
+
 
 try:
     while True:
@@ -98,12 +107,16 @@ try:
                 stall=0
                 MoveStall=0
                 for i in range(stateStored):
-                    if (abs(xpos-recentStates[i][2])<=5):
+                    if (abs(xpos-recentStates[i][2])<=stallRadius):
                         MoveStall+=1
-                        if(act==recentStates[i][1] and act!=1 and act!=4):
+                        if(act==recentStates[i][1]):
                             stall+=1
+                            if(not penalizeJumpStall and (act==1 or act==4)):
+                                #dont give stall penalty if not penalizeJumpStall and jumping
+                                stall-=1
+
                 #print(stall)
-                if(MoveStall>=stateStored*0.99 and states>=100):
+                if(MoveStall>=stateStored*stallReset and states>=100):
                     # if stalling reset
                     #print("reset")
                     zero=np.zeros([7])
@@ -113,14 +126,12 @@ try:
                     #print(recentStates[i][0])
                     #print(recentStates[i][1])
                     reward=(xpos-recentStates[i][2])
-                    if(act==0 or act==1):
-                        reward+=5
-                    if(act==5):
-                        reward-=5
-                    if (abs(reward)<=5):
-                        reward-=5*stall
+                    if(recentStates[i][1]==0 or recentStates[i][1]==1):
+                        reward+=forwardBonus
+                    if (abs(reward)<=stallRadius):
+                        reward-=stallPenalty*stall
                         if(act==6 or act==5):
-                            reward-=5*stall
+                            reward-=stallPenalty*stall
                     #print(reward)
                     reps=QarrayReps[int(recentStates[i][0])][int(recentStates[i][1])]
                     if(reps<0):
@@ -148,6 +159,7 @@ try:
             #print("\n")
             #print("\n")
             ob, rew, done, info = env.step(ac)
+            xpos = info['x']
             t += 1
             if t % 5 == 0:
                 #captures environment
@@ -157,7 +169,6 @@ try:
 
                 #cv2.imshow('main', scaledimg)
                 #cv2.waitKey(1)
-                xpos = info['x']
                 #xpos_end = info['screen_x_end']
                 #convert screenshot into 1D array of values
                 for x in ob:
@@ -250,7 +261,7 @@ try:
                         else:
                             print("done! total reward: time=%i, reward=%d" % (t, totrew[0]))
                         input("press enter to continue")
-                        ob, rew, done, info = env.step([False, False, False, True, False, False, False, False, False, False, False, False])
+                        #ob, rew, done, info = env.step([False, False, False, True, False, False, False, False, False, False, False, False])
                         print()
                     else:
                         input("")

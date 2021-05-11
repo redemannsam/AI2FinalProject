@@ -57,6 +57,7 @@ recentCounter=0
 curState=0
 imgarray = []
 inx, iny, inc = env.observation_space.shape
+maxpos=0
 
 inx = int(inx/8)
 iny = int(iny/8)
@@ -160,6 +161,8 @@ try:
             #print("\n")
             ob, rew, done, info = env.step(ac)
             xpos = info['x']
+            if maxpos < xpos:
+                maxpos=xpos
             t += 1
             if t % 5 == 0:
                 #captures environment
@@ -257,9 +260,9 @@ try:
                 try:
                     if verbosity >= 0:
                         if args.players > 1:
-                            print("done! total reward: time=%i, reward=%r, final position= %f" % (t, totrew,info['x']))
+                            print("done! total reward: time=%i, reward=%r, Max position attained= %d" % (t, totrew,maxpos))
                         else:
-                            print("done! total reward: time=%i, reward=%d, final position=%f" % (t, totrew[0],info['x']))
+                            print("done! total reward: time=%i, reward=%d, Max position attained=%d" % (t, totrew[0],maxpos))
                         input("press enter to continue")
                         #ob, rew, done, info = env.step([False, False, False, True, False, False, False, False, False, False, False, False])
                         print()

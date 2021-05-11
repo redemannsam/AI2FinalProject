@@ -257,9 +257,9 @@ try:
                 try:
                     if verbosity >= 0:
                         if args.players > 1:
-                            print("done! total reward: time=%i, reward=%r" % (t, totrew))
+                            print("done! total reward: time=%i, reward=%r, final position= %f" % (t, totrew,info['x']))
                         else:
-                            print("done! total reward: time=%i, reward=%d" % (t, totrew[0]))
+                            print("done! total reward: time=%i, reward=%d, final position=%f" % (t, totrew[0],info['x']))
                         input("press enter to continue")
                         #ob, rew, done, info = env.step([False, False, False, True, False, False, False, False, False, False, False, False])
                         print()

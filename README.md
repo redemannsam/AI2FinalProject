@@ -1,5 +1,6 @@
 # Intelligent Sonic the HedgeHog Agent
-
+## Repository Overview
+Each algorithm's code (NEAT, Q-Learning, A2C) is in its own branch.
 ## Setup
 
 1.) Clone the gym-retro repo:

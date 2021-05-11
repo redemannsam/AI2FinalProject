@@ -3,20 +3,35 @@ import numpy as np
 import neat
 import cv2
 import pickle
+import time
 
 env = retro.make(game='SonicTheHedgehog-Genesis', state='GreenHillZone.Act1')
-imgarray = []
+img = []
+totaltime = 0.0
 
 #runs neat, evaluates genome's fitness, checks if goal has been reached
 def eval_genomes(genomes, config):
+    global totaltime
+    bestGenome = None
     for genome_id, genome in genomes:
+        if genome.fitness == None:
+            genome.fitness = 0
+        if bestGenome == None or bestGenome.fitness < genome.fitness:
+                bestGenome = genome
+        #check how long training has been running; if training time is done, save best genome
+        if(totaltime >= 900):
+            with open('winner.pkl', 'wb') as output:
+                pickle.dump(bestGenome, output, 1)
+            print(bestGenome.fitness)
+            exit()
+        start = time.time()
         ob = env.reset()
         ac = env.action_space.sample()
 
-        inx, iny, inc = env.observation_space.shape
+        x, y, c = env.observation_space.shape
 
-        inx = int(inx/8)
-        iny = int(iny/8)
+        x = int(x/8)
+        y = int(y/8)
 
         #create neural network for given genome
         net = neat.nn.RecurrentNetwork.create(genome, config)
@@ -30,29 +45,29 @@ def eval_genomes(genomes, config):
         done = False
         #cv2.namedWindow("main", cv2.WINDOW_NORMAL)
         while not done:
-            env.render()
+            #env.render()
             #scaledimg = cv2.cvtColor(ob, cv2.COLOR_BGR2GRAY)
             #scaledimg = cv2.resize(scaledimg, (iny, inx))
 
             #take screenshot of screen to use as input for neural net
-            ob = cv2.resize(ob, (inx, iny))
+            ob = cv2.resize(ob, (x, y))
             ob = cv2.cvtColor(ob, cv2.COLOR_BGR2GRAY)
-            ob = np.reshape(ob, (inx, iny))
+            ob = np.reshape(ob, (x, y))
 
             #cv2.imshow('main', scaledimg)
             #cv2.waitKey(1)
 
             #convert screenshot into 1D array of values
-            for x in ob:
-                for y in x:
-                    imgarray.append(y)
+            for x_pos in ob:
+                for y_pos in x_pos:
+                    img.append(y_pos)
 
             #get output from neural network given screenshot input
-            nnOutput = net.activate(imgarray)
+            output = net.activate(img)
             
             #agent reacts based on the output of the neural network for that frame
-            ob, rew, done, info = env.step(nnOutput)
-            imgarray.clear()
+            ob, rew, done, info = env.step(output)
+            img.clear()
 
             xpos = info['x']
             xpos_end = info['screen_x_end']
@@ -77,10 +92,12 @@ def eval_genomes(genomes, config):
             #if the agent does not make rigthward progress within 250 frames, move on to next genome
             if done or counter == 250:
                 done = True
-                print(genome_id, fitness_current)
+                print("ID: " + str(genome_id) + " fitness: " + str(fitness_current) + " total time: " + str(totaltime))
 
             #update's genome's fitness
             genome.fitness = fitness_current
+        end = time.time()
+        totaltime += end - start
 
 #NEAT neural network configuration (default)
 config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction, neat.DefaultSpeciesSet, neat.DefaultStagnation, 'config-feedforward')
